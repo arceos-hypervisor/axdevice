@@ -3,7 +3,7 @@ use crate::AxVmDeviceConfig;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 
-use axaddrspace::{device::{DeviceAddrRange, Port, PortRange, SysRegAddr, SysRegAddrRange}, GuestPhysAddr, GuestPhysAddrRange};
+use axaddrspace::{device::{AccessWidth, DeviceAddrRange, Port, PortRange, SysRegAddr, SysRegAddrRange}, GuestPhysAddr, GuestPhysAddrRange};
 use axdevice_base::{BaseDeviceOps, BaseMmioDeviceOps, BasePortDeviceOps, BaseSysRegDeviceOps, EmuDeviceType, EmulatedDeviceConfig, VCpuInfo};
 use axerrno::AxResult;
 
@@ -95,7 +95,7 @@ impl<U: VCpuInfo> AxVmDevices<U> {
     }
 
     /// Handle the MMIO read by GuestPhysAddr and data width, return the value of the guest want to read
-    pub fn handle_mmio_read(&self, addr: GuestPhysAddr, width: usize) -> AxResult<usize> {
+    pub fn handle_mmio_read(&self, addr: GuestPhysAddr, width: AccessWidth) -> AxResult<usize> {
         if let Some(emu_dev) = self.find_mmio_dev(addr) {
             info!(
                 "emu: {:?} handler read ipa {:#x}",
@@ -108,7 +108,7 @@ impl<U: VCpuInfo> AxVmDevices<U> {
     }
 
     /// Handle the MMIO write by GuestPhysAddr, data width and the value need to write, call specific device to write the value
-    pub fn handle_mmio_write(&self, addr: GuestPhysAddr, width: usize, val: usize) {
+    pub fn handle_mmio_write(&self, addr: GuestPhysAddr, width: AccessWidth, val: usize) {
         if let Some(emu_dev) = self.find_mmio_dev(addr) {
             info!(
                 "emu: {:?} handler write ipa {:#x}",
@@ -125,7 +125,7 @@ impl<U: VCpuInfo> AxVmDevices<U> {
     }
 
     /// Handle the system register read by SysRegAddr and data width, return the value of the guest want to read
-    pub fn handle_sysreg_read(&self, addr: SysRegAddr, width: usize) -> AxResult<usize> {
+    pub fn handle_sysreg_read(&self, addr: SysRegAddr, width: AccessWidth) -> AxResult<usize> {
         if let Some(emu_dev) = self.find_sysreg_dev(addr) {
             info!(
                 "emu: {:?} handler read sysreg {:#x}",
@@ -138,7 +138,7 @@ impl<U: VCpuInfo> AxVmDevices<U> {
     }
 
     /// Handle the system register write by SysRegAddr, data width and the value need to write, call specific device to write the value
-    pub fn handle_sysreg_write(&self, addr: SysRegAddr, width: usize, val: usize) {
+    pub fn handle_sysreg_write(&self, addr: SysRegAddr, width: AccessWidth, val: usize) {
         if let Some(emu_dev) = self.find_sysreg_dev(addr) {
             info!(
                 "emu: {:?} handler write sysreg {:#x}",
@@ -152,7 +152,7 @@ impl<U: VCpuInfo> AxVmDevices<U> {
     }
 
     /// Handle the port read by port number and data width, return the value of the guest want to read
-    pub fn handle_port_read(&self, port: Port, width: usize) -> AxResult<usize> {
+    pub fn handle_port_read(&self, port: Port, width: AccessWidth) -> AxResult<usize> {
         if let Some(emu_dev) = self.find_port_dev(port) {
             info!("emu: {:?} handler read port {:#x}", emu_dev.address_range(), port.0);
             return emu_dev.handle_read(port, width);
@@ -161,7 +161,7 @@ impl<U: VCpuInfo> AxVmDevices<U> {
     }
 
     /// Handle the port write by port number, data width and the value need to write, call specific device to write the value
-    pub fn handle_port_write(&self, port: Port, width: usize, val: usize) {
+    pub fn handle_port_write(&self, port: Port, width: AccessWidth, val: usize) {
         if let Some(emu_dev) = self.find_port_dev(port) {
             info!("emu: {:?} handler write port {:#x}", emu_dev.address_range(), port.0);
             emu_dev.handle_write(port, width, val);
