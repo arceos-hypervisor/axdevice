@@ -3,8 +3,14 @@ use crate::AxVmDeviceConfig;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 
-use axaddrspace::{device::{AccessWidth, DeviceAddrRange, Port, PortRange, SysRegAddr, SysRegAddrRange}, GuestPhysAddr, GuestPhysAddrRange};
-use axdevice_base::{BaseDeviceOps, BaseMmioDeviceOps, BasePortDeviceOps, BaseSysRegDeviceOps, EmuDeviceType, EmulatedDeviceConfig, VCpuInfo};
+use axaddrspace::{
+    device::{AccessWidth, DeviceAddrRange, Port, PortRange, SysRegAddr, SysRegAddrRange},
+    GuestPhysAddr, GuestPhysAddrRange,
+};
+use axdevice_base::{
+    BaseDeviceOps, BaseMmioDeviceOps, BasePortDeviceOps, BaseSysRegDeviceOps, EmuDeviceType,
+    EmulatedDeviceConfig, VCpuInfo,
+};
 use axerrno::AxResult;
 
 pub struct AxEmuDevices<R: DeviceAddrRange, U: VCpuInfo> {
@@ -85,7 +91,10 @@ impl<U: VCpuInfo> AxVmDevices<U> {
     }
 
     /// Find specific system register device by ipa
-    pub fn find_sysreg_dev(&self, sysreg_addr: SysRegAddr) -> Option<Arc<dyn BaseSysRegDeviceOps<U>>> {
+    pub fn find_sysreg_dev(
+        &self,
+        sysreg_addr: SysRegAddr,
+    ) -> Option<Arc<dyn BaseSysRegDeviceOps<U>>> {
         self.emu_sysreg_devices.find_dev(sysreg_addr)
     }
 
@@ -108,15 +117,19 @@ impl<U: VCpuInfo> AxVmDevices<U> {
     }
 
     /// Handle the MMIO write by GuestPhysAddr, data width and the value need to write, call specific device to write the value
-    pub fn handle_mmio_write(&self, addr: GuestPhysAddr, width: AccessWidth, val: usize) {
+    pub fn handle_mmio_write(
+        &self,
+        addr: GuestPhysAddr,
+        width: AccessWidth,
+        val: usize,
+    ) -> AxResult {
         if let Some(emu_dev) = self.find_mmio_dev(addr) {
             info!(
                 "emu: {:?} handler write ipa {:#x}",
                 emu_dev.address_range(),
                 addr
             );
-            emu_dev.handle_write(addr, width, val);
-            return;
+            return emu_dev.handle_write(addr, width, val);
         }
         panic!(
             "emu_handler: no emul handler for data abort ipa {:#x}",
@@ -138,34 +151,48 @@ impl<U: VCpuInfo> AxVmDevices<U> {
     }
 
     /// Handle the system register write by SysRegAddr, data width and the value need to write, call specific device to write the value
-    pub fn handle_sysreg_write(&self, addr: SysRegAddr, width: AccessWidth, val: usize) {
+    pub fn handle_sysreg_write(
+        &self,
+        addr: SysRegAddr,
+        width: AccessWidth,
+        val: usize,
+    ) -> AxResult {
         if let Some(emu_dev) = self.find_sysreg_dev(addr) {
             info!(
                 "emu: {:?} handler write sysreg {:#x}",
                 emu_dev.address_range(),
                 addr.0
             );
-            emu_dev.handle_write(addr, width, val);
-            return;
+            return emu_dev.handle_write(addr, width, val);
         }
-        panic!("emu_handler: no emul handler for sysreg write {:#x}", addr.0);
+        panic!(
+            "emu_handler: no emul handler for sysreg write {:#x}",
+            addr.0
+        );
     }
 
     /// Handle the port read by port number and data width, return the value of the guest want to read
     pub fn handle_port_read(&self, port: Port, width: AccessWidth) -> AxResult<usize> {
         if let Some(emu_dev) = self.find_port_dev(port) {
-            info!("emu: {:?} handler read port {:#x}", emu_dev.address_range(), port.0);
+            info!(
+                "emu: {:?} handler read port {:#x}",
+                emu_dev.address_range(),
+                port.0
+            );
             return emu_dev.handle_read(port, width);
         }
         panic!("emu_handle: no emul handler for port read {:#x}", port.0);
     }
 
     /// Handle the port write by port number, data width and the value need to write, call specific device to write the value
-    pub fn handle_port_write(&self, port: Port, width: AccessWidth, val: usize) {
+    pub fn handle_port_write(&self, port: Port, width: AccessWidth, val: usize) -> AxResult {
         if let Some(emu_dev) = self.find_port_dev(port) {
-            info!("emu: {:?} handler write port {:#x}", emu_dev.address_range(), port.0);
-            emu_dev.handle_write(port, width, val);
-            return;
+            info!(
+                "emu: {:?} handler write port {:#x}",
+                emu_dev.address_range(),
+                port.0
+            );
+            return emu_dev.handle_write(port, width, val);
         }
         panic!("emu_handler: no emul handler for port write {:#x}", port.0);
     }
