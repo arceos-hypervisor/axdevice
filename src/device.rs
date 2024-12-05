@@ -42,7 +42,7 @@ type AxEmuPortDevices = AxEmuDevices<PortRange>;
 pub struct AxVmDevices {
     /// emu devices
     emu_mmio_devices: AxEmuMmioDevices,
-    emu_sysreg_devices: AxEmuSysRegDevices,
+    emu_sys_reg_devices: AxEmuSysRegDevices,
     emu_port_devices: AxEmuPortDevices,
     // TODO passthrough devices or other type devices ...
 }
@@ -83,7 +83,7 @@ impl AxVmDevices {
     pub fn new(config: AxVmDeviceConfig) -> Self {
         let mut this = Self {
             emu_mmio_devices: AxEmuMmioDevices::new(),
-            emu_sysreg_devices: AxEmuSysRegDevices::new(),
+            emu_sys_reg_devices: AxEmuSysRegDevices::new(),
             emu_port_devices: AxEmuPortDevices::new(),
         };
 
@@ -123,8 +123,11 @@ impl AxVmDevices {
     }
 
     /// Find specific system register device by ipa
-    pub fn find_sysreg_dev(&self, sysreg_addr: SysRegAddr) -> Option<Arc<dyn BaseSysRegDeviceOps>> {
-        self.emu_sysreg_devices.find_dev(sysreg_addr)
+    pub fn find_sys_reg_dev(
+        &self,
+        sys_reg_addr: SysRegAddr,
+    ) -> Option<Arc<dyn BaseSysRegDeviceOps>> {
+        self.emu_sys_reg_devices.find_dev(sys_reg_addr)
     }
 
     /// Find specific port device by port number
@@ -164,34 +167,34 @@ impl AxVmDevices {
     }
 
     /// Handle the system register read by SysRegAddr and data width, return the value of the guest want to read
-    pub fn handle_sysreg_read(
+    pub fn handle_sys_reg_read(
         &self,
         addr: SysRegAddr,
         width: AccessWidth,
         context: DeviceRWContext,
     ) -> AxResult<usize> {
-        if let Some(emu_dev) = self.find_sysreg_dev(addr) {
-            log_device_io("sysreg", addr.0, emu_dev.address_range(), true, width);
+        if let Some(emu_dev) = self.find_sys_reg_dev(addr) {
+            log_device_io("sys_reg", addr.0, emu_dev.address_range(), true, width);
 
             return emu_dev.handle_read(addr, width, context);
         }
-        panic_device_not_found("sysreg", addr, true, width);
+        panic_device_not_found("sys_reg", addr, true, width);
     }
 
     /// Handle the system register write by SysRegAddr, data width and the value need to write, call specific device to write the value
-    pub fn handle_sysreg_write(
+    pub fn handle_sys_reg_write(
         &self,
         addr: SysRegAddr,
         width: AccessWidth,
         val: usize,
         context: DeviceRWContext,
     ) -> AxResult {
-        if let Some(emu_dev) = self.find_sysreg_dev(addr) {
-            log_device_io("sysreg", addr.0, emu_dev.address_range(), false, width);
+        if let Some(emu_dev) = self.find_sys_reg_dev(addr) {
+            log_device_io("sys_reg", addr.0, emu_dev.address_range(), false, width);
 
             return emu_dev.handle_write(addr, width, val, context);
         }
-        panic_device_not_found("sysreg", addr, false, width);
+        panic_device_not_found("sys_reg", addr, false, width);
     }
 
     /// Handle the port read by port number and data width, return the value of the guest want to read
