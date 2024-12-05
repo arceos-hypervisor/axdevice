@@ -14,3 +14,6 @@ axerrno = "0.1.0"
 memory_addr = "0.3"
 axaddrspace  = { git = "https://github.com/arceos-hypervisor/axaddrspace.git", branch = "inject_interrupt" }
 axdevice_base = { git = "https://github.com/arceos-hypervisor/axdevice_crates.git", branch = "inject_interrupt" }
+
+[patch.crates-io]
+page_table_entry = { git = "https://github.com/arceos-hypervisor/page_table_multiarch.git", branch = "fix_old_x86_64" }

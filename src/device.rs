@@ -1,3 +1,5 @@
+use core::panic;
+
 use crate::AxVmDeviceConfig;
 
 use alloc::sync::Arc;
@@ -8,23 +10,23 @@ use axaddrspace::{
     GuestPhysAddr, GuestPhysAddrRange,
 };
 use axdevice_base::{
-    BaseDeviceOps, BaseMmioDeviceOps, BasePortDeviceOps, BaseSysRegDeviceOps, EmuDeviceType,
-    EmulatedDeviceConfig, VCpuInfo,
+    BaseDeviceOps, BaseMmioDeviceOps, BasePortDeviceOps, BaseSysRegDeviceOps, DeviceRWContext,
+    EmuDeviceType, EmulatedDeviceConfig,
 };
 use axerrno::AxResult;
 
-pub struct AxEmuDevices<R: DeviceAddrRange, U: VCpuInfo> {
-    emu_devices: Vec<Arc<dyn BaseDeviceOps<R, U>>>,
+pub struct AxEmuDevices<R: DeviceAddrRange> {
+    emu_devices: Vec<Arc<dyn BaseDeviceOps<R>>>,
 }
 
-impl<R: DeviceAddrRange, U: VCpuInfo> AxEmuDevices<R, U> {
+impl<R: DeviceAddrRange> AxEmuDevices<R> {
     pub fn new() -> Self {
         Self {
             emu_devices: Vec::new(),
         }
     }
 
-    pub fn find_dev(&self, addr: R::Addr) -> Option<Arc<dyn BaseDeviceOps<R, U>>> {
+    pub fn find_dev(&self, addr: R::Addr) -> Option<Arc<dyn BaseDeviceOps<R>>> {
         self.emu_devices
             .iter()
             .find(|&dev| dev.address_range().contains(addr))
@@ -32,21 +34,51 @@ impl<R: DeviceAddrRange, U: VCpuInfo> AxEmuDevices<R, U> {
     }
 }
 
-type AxEmuMmioDevices<U> = AxEmuDevices<GuestPhysAddrRange, U>;
-type AxEmuSysRegDevices<U> = AxEmuDevices<SysRegAddrRange, U>;
-type AxEmuPortDevices<U> = AxEmuDevices<PortRange, U>;
+type AxEmuMmioDevices = AxEmuDevices<GuestPhysAddrRange>;
+type AxEmuSysRegDevices = AxEmuDevices<SysRegAddrRange>;
+type AxEmuPortDevices = AxEmuDevices<PortRange>;
 
 /// represent A vm own devices
-pub struct AxVmDevices<U: VCpuInfo> {
+pub struct AxVmDevices {
     /// emu devices
-    emu_mmio_devices: AxEmuMmioDevices<U>,
-    emu_sysreg_devices: AxEmuSysRegDevices<U>,
-    emu_port_devices: AxEmuPortDevices<U>,
+    emu_mmio_devices: AxEmuMmioDevices,
+    emu_sysreg_devices: AxEmuSysRegDevices,
+    emu_port_devices: AxEmuPortDevices,
     // TODO passthrough devices or other type devices ...
 }
 
+#[inline]
+fn log_device_io(
+    addr_type: &'static str,
+    addr: impl core::fmt::LowerHex,
+    addr_range: impl core::fmt::LowerHex,
+    read: bool,
+    width: AccessWidth,
+) {
+    let rw = if read { "read" } else { "write" };
+    info!(
+        "emu_device {}: {} {:#x} in range {:#x} with width {:?}",
+        rw, addr_type, addr, addr_range, width
+    )
+}
+
+#[inline]
+fn panic_device_not_found(
+    addr_type: &'static str,
+    addr: impl core::fmt::LowerHex,
+    read: bool,
+    width: AccessWidth,
+) -> ! {
+    let rw = if read { "read" } else { "write" };
+    error!(
+        "emu_device {} failed: device not found for {} {:#x} with width {:?}",
+        rw, addr_type, addr, width
+    );
+    panic!("emu_device not found");
+}
+
 /// The implemention for AxVmDevices
-impl<U: VCpuInfo> AxVmDevices<U> {
+impl AxVmDevices {
     /// According AxVmDeviceConfig to init the AxVmDevices
     pub fn new(config: AxVmDeviceConfig) -> Self {
         let mut this = Self {
@@ -86,34 +118,33 @@ impl<U: VCpuInfo> AxVmDevices<U> {
     }
 
     /// Find specific MMIO device by ipa
-    pub fn find_mmio_dev(&self, ipa: GuestPhysAddr) -> Option<Arc<dyn BaseMmioDeviceOps<U>>> {
+    pub fn find_mmio_dev(&self, ipa: GuestPhysAddr) -> Option<Arc<dyn BaseMmioDeviceOps>> {
         self.emu_mmio_devices.find_dev(ipa)
     }
 
     /// Find specific system register device by ipa
-    pub fn find_sysreg_dev(
-        &self,
-        sysreg_addr: SysRegAddr,
-    ) -> Option<Arc<dyn BaseSysRegDeviceOps<U>>> {
+    pub fn find_sysreg_dev(&self, sysreg_addr: SysRegAddr) -> Option<Arc<dyn BaseSysRegDeviceOps>> {
         self.emu_sysreg_devices.find_dev(sysreg_addr)
     }
 
     /// Find specific port device by port number
-    pub fn find_port_dev(&self, port: Port) -> Option<Arc<dyn BasePortDeviceOps<U>>> {
+    pub fn find_port_dev(&self, port: Port) -> Option<Arc<dyn BasePortDeviceOps>> {
         self.emu_port_devices.find_dev(port)
     }
 
     /// Handle the MMIO read by GuestPhysAddr and data width, return the value of the guest want to read
-    pub fn handle_mmio_read(&self, addr: GuestPhysAddr, width: AccessWidth) -> AxResult<usize> {
+    pub fn handle_mmio_read(
+        &self,
+        addr: GuestPhysAddr,
+        width: AccessWidth,
+        context: DeviceRWContext,
+    ) -> AxResult<usize> {
         if let Some(emu_dev) = self.find_mmio_dev(addr) {
-            info!(
-                "emu: {:?} handler read ipa {:#x}",
-                emu_dev.address_range(),
-                addr
-            );
-            return emu_dev.handle_read(addr, width);
+            log_device_io("mmio", addr, emu_dev.address_range(), true, width);
+
+            return emu_dev.handle_read(addr, width, context);
         }
-        panic!("emu_handle: no emul handler for data abort ipa {:#x}", addr);
+        panic_device_not_found("mmio", addr, true, width);
     }
 
     /// Handle the MMIO write by GuestPhysAddr, data width and the value need to write, call specific device to write the value
@@ -122,32 +153,29 @@ impl<U: VCpuInfo> AxVmDevices<U> {
         addr: GuestPhysAddr,
         width: AccessWidth,
         val: usize,
+        context: DeviceRWContext,
     ) -> AxResult {
         if let Some(emu_dev) = self.find_mmio_dev(addr) {
-            info!(
-                "emu: {:?} handler write ipa {:#x}",
-                emu_dev.address_range(),
-                addr
-            );
-            return emu_dev.handle_write(addr, width, val);
+            log_device_io("mmio", addr, emu_dev.address_range(), false, width);
+
+            return emu_dev.handle_write(addr, width, val, context);
         }
-        panic!(
-            "emu_handler: no emul handler for data abort ipa {:#x}",
-            addr
-        );
+        panic_device_not_found("mmio", addr, false, width);
     }
 
     /// Handle the system register read by SysRegAddr and data width, return the value of the guest want to read
-    pub fn handle_sysreg_read(&self, addr: SysRegAddr, width: AccessWidth) -> AxResult<usize> {
+    pub fn handle_sysreg_read(
+        &self,
+        addr: SysRegAddr,
+        width: AccessWidth,
+        context: DeviceRWContext,
+    ) -> AxResult<usize> {
         if let Some(emu_dev) = self.find_sysreg_dev(addr) {
-            info!(
-                "emu: {:?} handler read sysreg {:#x}",
-                emu_dev.address_range(),
-                addr.0
-            );
-            return emu_dev.handle_read(addr, width);
+            log_device_io("sysreg", addr.0, emu_dev.address_range(), true, width);
+
+            return emu_dev.handle_read(addr, width, context);
         }
-        panic!("emu_handle: no emul handler for sysreg read {:#x}", addr.0);
+        panic_device_not_found("sysreg", addr, true, width);
     }
 
     /// Handle the system register write by SysRegAddr, data width and the value need to write, call specific device to write the value
@@ -156,44 +184,44 @@ impl<U: VCpuInfo> AxVmDevices<U> {
         addr: SysRegAddr,
         width: AccessWidth,
         val: usize,
+        context: DeviceRWContext,
     ) -> AxResult {
         if let Some(emu_dev) = self.find_sysreg_dev(addr) {
-            info!(
-                "emu: {:?} handler write sysreg {:#x}",
-                emu_dev.address_range(),
-                addr.0
-            );
-            return emu_dev.handle_write(addr, width, val);
+            log_device_io("sysreg", addr.0, emu_dev.address_range(), false, width);
+
+            return emu_dev.handle_write(addr, width, val, context);
         }
-        panic!(
-            "emu_handler: no emul handler for sysreg write {:#x}",
-            addr.0
-        );
+        panic_device_not_found("sysreg", addr, false, width);
     }
 
     /// Handle the port read by port number and data width, return the value of the guest want to read
-    pub fn handle_port_read(&self, port: Port, width: AccessWidth) -> AxResult<usize> {
+    pub fn handle_port_read(
+        &self,
+        port: Port,
+        width: AccessWidth,
+        context: DeviceRWContext,
+    ) -> AxResult<usize> {
         if let Some(emu_dev) = self.find_port_dev(port) {
-            info!(
-                "emu: {:?} handler read port {:#x}",
-                emu_dev.address_range(),
-                port.0
-            );
-            return emu_dev.handle_read(port, width);
+            log_device_io("port", port.0, emu_dev.address_range(), true, width);
+
+            return emu_dev.handle_read(port, width, context);
         }
-        panic!("emu_handle: no emul handler for port read {:#x}", port.0);
+        panic_device_not_found("port", port, true, width);
     }
 
     /// Handle the port write by port number, data width and the value need to write, call specific device to write the value
-    pub fn handle_port_write(&self, port: Port, width: AccessWidth, val: usize) -> AxResult {
+    pub fn handle_port_write(
+        &self,
+        port: Port,
+        width: AccessWidth,
+        val: usize,
+        context: DeviceRWContext,
+    ) -> AxResult {
         if let Some(emu_dev) = self.find_port_dev(port) {
-            info!(
-                "emu: {:?} handler write port {:#x}",
-                emu_dev.address_range(),
-                port.0
-            );
-            return emu_dev.handle_write(port, width, val);
+            log_device_io("port", port.0, emu_dev.address_range(), false, width);
+
+            return emu_dev.handle_write(port, width, val, context);
         }
-        panic!("emu_handler: no emul handler for port write {:#x}", port.0);
+        panic_device_not_found("port", port, false, width);
     }
 }
