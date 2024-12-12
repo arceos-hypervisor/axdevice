@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 log = "0.4"
 cfg-if = "1.0"
+timer_list = "0.1.0"
 serde = { version = "1.0.204", default-features = false, features = ["derive", "alloc"] }
 # System independent crates provided by ArceOS.
 axerrno = "0.1.0"
