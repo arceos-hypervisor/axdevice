@@ -8,7 +8,6 @@ use core::sync::atomic::Ordering;
 
 static TOKEN: AtomicUsize = AtomicUsize::new(0);
 
-
 struct VmmTimerEvent {
     token: usize,
     timer_callback: Box<dyn FnOnce(TimeValue) + Send + 'static>,
@@ -27,7 +26,7 @@ impl VmmTimerEvent {
 }
 
 impl TimerEvent for VmmTimerEvent {
-    fn callback(self, now: TimeValue) {        
+    fn callback(self, now: TimeValue) {
         (self.timer_callback)(now)
     }
 }
@@ -58,7 +57,8 @@ impl AxVmTimer {
     {
         let token = TOKEN.fetch_add(1, Ordering::Release);
         let event = VmmTimerEvent::new(token, handler);
-        self.timer_list.set(TimeValue::from_nanos(deadline as u64), event);
+        self.timer_list
+            .set(TimeValue::from_nanos(deadline as u64), event);
         token
     }
 
@@ -90,7 +90,7 @@ impl AxVmTimer {
     /// # Returns
     /// `true` if an event was handled (i.e., a timer expired and its callback was executed),
     /// or `false` if no timers were expired.
-    pub fn check_events(&mut self, now: TimeValue) -> bool {
+    pub fn check_event(&mut self, now: TimeValue) -> bool {
         let event = self.timer_list.expire_one(now);
         if let Some((_deadline, event)) = event {
             error!("pick one {:#?} to handler!!!", _deadline);
