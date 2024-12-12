@@ -93,7 +93,7 @@ impl AxVmTimer {
     pub fn check_event(&mut self, now: TimeValue) -> bool {
         let event = self.timer_list.expire_one(now);
         if let Some((_deadline, event)) = event {
-            error!("pick one {:#?} to handler!!!", _deadline);
+            trace!("pick one {:#?} to handler!!!", _deadline);
             event.callback(now);
             true
         } else {
