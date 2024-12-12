@@ -32,7 +32,7 @@ impl TimerEvent for VmmTimerEvent {
 }
 
 /// A timer management structure for the virtual machine (VMM).
-/// 
+///
 /// This structure provides functionality to:
 /// - Register new timers with callbacks
 /// - Cancel existing timers
