@@ -62,27 +62,32 @@ impl AxVmDevices {
     }
 
     /// Handle the MMIO read by GuestPhysAddr and data width, return the value of the guest want to read
-    pub fn handle_mmio_read(&self, addr: GuestPhysAddr, width: usize) -> AxResult<usize> {
+    pub fn handle_mmio_read(
+        &self,
+        addr: GuestPhysAddr,
+        width: usize,
+        vcpu_id: usize,
+    ) -> AxResult<usize> {
         if let Some(emu_dev) = self.find_dev(addr) {
             info!(
                 "emu: {:?} handler read ipa {:#x}",
                 emu_dev.address_range(),
                 addr
             );
-            return emu_dev.handle_read(addr, width);
+            return emu_dev.handle_read(addr, width, vcpu_id);
         }
         panic!("emu_handle: no emul handler for data abort ipa {:#x}", addr);
     }
 
     /// Handle the MMIO write by GuestPhysAddr, data width and the value need to write, call specific device to write the value
-    pub fn handle_mmio_write(&self, addr: GuestPhysAddr, width: usize, val: usize) {
+    pub fn handle_mmio_write(&self, addr: GuestPhysAddr, width: usize, val: usize, vcpu_id: usize) {
         if let Some(emu_dev) = self.find_dev(addr) {
             info!(
                 "emu: {:?} handler write ipa {:#x}",
                 emu_dev.address_range(),
                 addr
             );
-            emu_dev.handle_write(addr, width, val);
+            emu_dev.handle_write(addr, width, val, vcpu_id);
             return;
         }
         panic!(
