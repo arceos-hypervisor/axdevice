@@ -6,14 +6,15 @@ use alloc::sync::Arc;
 use alloc::vec::Vec;
 
 use axaddrspace::{
-    device::{AccessWidth, DeviceAddrRange, Port, PortRange, SysRegAddr, SysRegAddrRange},
     GuestPhysAddr, GuestPhysAddrRange,
+    device::{AccessWidth, DeviceAddrRange, Port, PortRange, SysRegAddr, SysRegAddrRange},
 };
 use axdevice_base::{
     BaseDeviceOps, BaseMmioDeviceOps, BasePortDeviceOps, BaseSysRegDeviceOps, DeviceRWContext,
-    EmuDeviceType, EmulatedDeviceConfig,
+    EmuDeviceType,
 };
 use axerrno::AxResult;
+use axvmconfig::EmulatedDeviceConfig;
 
 pub struct AxEmuDevices<R: DeviceAddrRange> {
     emu_devices: Vec<Arc<dyn BaseDeviceOps<R>>>,
