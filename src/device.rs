@@ -2,7 +2,7 @@ use core::panic;
 
 use crate::AxVmDeviceConfig;
 
-use alloc::sync::Arc;
+use alloc::{boxed::Box, sync::Arc};
 use alloc::vec::Vec;
 
 use axaddrspace::{
@@ -10,28 +10,51 @@ use axaddrspace::{
     device::{AccessWidth, DeviceAddrRange, Port, PortRange, SysRegAddr, SysRegAddrRange},
 };
 use axdevice_base::{
-    BaseDeviceOps, BaseMmioDeviceOps, BasePortDeviceOps, BaseSysRegDeviceOps, DeviceRWContext,
-    EmuDeviceType,
+    BaseDeviceOps, BaseMmioDeviceOps, BasePortDeviceOps, BaseSysRegDeviceOps,
 };
 use axerrno::AxResult;
 use axvmconfig::EmulatedDeviceConfig;
 
+/// A set of emulated device types that can be accessed by a specific address range type.
 pub struct AxEmuDevices<R: DeviceAddrRange> {
     emu_devices: Vec<Arc<dyn BaseDeviceOps<R>>>,
 }
 
 impl<R: DeviceAddrRange> AxEmuDevices<R> {
+    /// Creates a new [`AxEmuDevices`] instance.
     pub fn new() -> Self {
         Self {
             emu_devices: Vec::new(),
         }
     }
 
+    /// Adds a device to the set.
+    pub fn add_dev(&mut self, dev: Arc<dyn BaseDeviceOps<R>>) {
+        self.emu_devices.push(dev);
+    }
+
+    // pub fn remove_dev(&mut self, ...)
+    // 
+    // `remove_dev` seems to need something like `downcast-rs` to make sense. As it's not likely to
+    // be able to have a proper predicate to remove a device from the list without knowing the
+    // concrete type of the device.
+
+    /// Find a device by address.
     pub fn find_dev(&self, addr: R::Addr) -> Option<Arc<dyn BaseDeviceOps<R>>> {
         self.emu_devices
             .iter()
             .find(|&dev| dev.address_range().contains(addr))
             .cloned()
+    }
+
+    /// Iterates over the devices in the set.
+    pub fn iter(&self) -> impl Iterator<Item = &Arc<dyn BaseDeviceOps<R>>> {
+        self.emu_devices.iter()
+    }
+
+    /// Iterates over the devices in the set mutably.
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut Arc<dyn BaseDeviceOps<R>>> {
+        self.emu_devices.iter_mut()
     }
 }
 
@@ -118,6 +141,53 @@ impl AxVmDevices {
         */
     }
 
+    /// Add a MMIO device to the device list
+    pub fn add_mmio_dev(&mut self, dev: Arc<dyn BaseMmioDeviceOps>) {
+        self.emu_mmio_devices.add_dev(dev);
+    }
+
+    /// Add a system register device to the device list
+    pub fn add_sys_reg_dev(&mut self, dev: Arc<dyn BaseSysRegDeviceOps>) {
+        self.emu_sys_reg_devices.add_dev(dev);
+    }
+
+    /// Add a port device to the device list
+    pub fn add_port_dev(&mut self, dev: Arc<dyn BasePortDeviceOps>) {
+        self.emu_port_devices.add_dev(dev);
+    }
+
+    /// Iterates over the MMIO devices in the set.
+    pub fn iter_mmio_dev(&self) -> impl Iterator<Item = &Arc<dyn BaseMmioDeviceOps>> {
+        self.emu_mmio_devices.iter()
+    }
+
+    /// Iterates over the system register devices in the set.
+    pub fn iter_sys_reg_dev(&self) -> impl Iterator<Item = &Arc<dyn BaseSysRegDeviceOps>> {
+        self.emu_sys_reg_devices.iter()
+    }
+
+    /// Iterates over the port devices in the set.
+    pub fn iter_port_dev(&self) -> impl Iterator<Item = &Arc<dyn BasePortDeviceOps>> {
+        self.emu_port_devices.iter()
+    }
+
+    /// Iterates over the MMIO devices in the set.
+    pub fn iter_mut_mmio_dev(&mut self) -> impl Iterator<Item = &mut Arc<dyn BaseMmioDeviceOps>> {
+        self.emu_mmio_devices.iter_mut()
+    }
+
+    /// Iterates over the system register devices in the set.
+    pub fn iter_mut_sys_reg_dev(
+        &mut self,
+    ) -> impl Iterator<Item = &mut Arc<dyn BaseSysRegDeviceOps>> {
+        self.emu_sys_reg_devices.iter_mut()
+    }
+
+    /// Iterates over the port devices in the set.
+    pub fn iter_mut_port_dev(&mut self) -> impl Iterator<Item = &mut Arc<dyn BasePortDeviceOps>> {
+        self.emu_port_devices.iter_mut()
+    }
+
     /// Find specific MMIO device by ipa
     pub fn find_mmio_dev(&self, ipa: GuestPhysAddr) -> Option<Arc<dyn BaseMmioDeviceOps>> {
         self.emu_mmio_devices.find_dev(ipa)
@@ -141,12 +211,11 @@ impl AxVmDevices {
         &self,
         addr: GuestPhysAddr,
         width: AccessWidth,
-        context: DeviceRWContext,
     ) -> AxResult<usize> {
         if let Some(emu_dev) = self.find_mmio_dev(addr) {
             log_device_io("mmio", addr, emu_dev.address_range(), true, width);
 
-            return emu_dev.handle_read(addr, width, context);
+            return emu_dev.handle_read(addr, width);
         }
         panic_device_not_found("mmio", addr, true, width);
     }
@@ -157,12 +226,11 @@ impl AxVmDevices {
         addr: GuestPhysAddr,
         width: AccessWidth,
         val: usize,
-        context: DeviceRWContext,
     ) -> AxResult {
         if let Some(emu_dev) = self.find_mmio_dev(addr) {
             log_device_io("mmio", addr, emu_dev.address_range(), false, width);
 
-            return emu_dev.handle_write(addr, width, val, context);
+            return emu_dev.handle_write(addr, width, val);
         }
         panic_device_not_found("mmio", addr, false, width);
     }
@@ -172,12 +240,11 @@ impl AxVmDevices {
         &self,
         addr: SysRegAddr,
         width: AccessWidth,
-        context: DeviceRWContext,
     ) -> AxResult<usize> {
         if let Some(emu_dev) = self.find_sys_reg_dev(addr) {
             log_device_io("sys_reg", addr.0, emu_dev.address_range(), true, width);
 
-            return emu_dev.handle_read(addr, width, context);
+            return emu_dev.handle_read(addr, width);
         }
         panic_device_not_found("sys_reg", addr, true, width);
     }
@@ -188,12 +255,11 @@ impl AxVmDevices {
         addr: SysRegAddr,
         width: AccessWidth,
         val: usize,
-        context: DeviceRWContext,
     ) -> AxResult {
         if let Some(emu_dev) = self.find_sys_reg_dev(addr) {
             log_device_io("sys_reg", addr.0, emu_dev.address_range(), false, width);
 
-            return emu_dev.handle_write(addr, width, val, context);
+            return emu_dev.handle_write(addr, width, val);
         }
         panic_device_not_found("sys_reg", addr, false, width);
     }
@@ -203,12 +269,11 @@ impl AxVmDevices {
         &self,
         port: Port,
         width: AccessWidth,
-        context: DeviceRWContext,
     ) -> AxResult<usize> {
         if let Some(emu_dev) = self.find_port_dev(port) {
             log_device_io("port", port.0, emu_dev.address_range(), true, width);
 
-            return emu_dev.handle_read(port, width, context);
+            return emu_dev.handle_read(port, width);
         }
         panic_device_not_found("port", port, true, width);
     }
@@ -219,12 +284,11 @@ impl AxVmDevices {
         port: Port,
         width: AccessWidth,
         val: usize,
-        context: DeviceRWContext,
     ) -> AxResult {
         if let Some(emu_dev) = self.find_port_dev(port) {
             log_device_io("port", port.0, emu_dev.address_range(), false, width);
 
-            return emu_dev.handle_write(port, width, val, context);
+            return emu_dev.handle_write(port, width, val);
         }
         panic_device_not_found("port", port, false, width);
     }
