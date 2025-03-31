@@ -2,15 +2,16 @@ use core::panic;
 
 use crate::AxVmDeviceConfig;
 
-use alloc::{boxed::Box, sync::Arc};
+use alloc::format;
 use alloc::vec::Vec;
-
+use alloc::{boxed::Box, sync::Arc};
+use arm_vgic::Vgic;
 use axaddrspace::{
     GuestPhysAddr, GuestPhysAddrRange,
     device::{AccessWidth, DeviceAddrRange, Port, PortRange, SysRegAddr, SysRegAddrRange},
 };
 use axdevice_base::{
-    BaseDeviceOps, BaseMmioDeviceOps, BasePortDeviceOps, BaseSysRegDeviceOps,
+    BaseDeviceOps, BaseMmioDeviceOps, BasePortDeviceOps, BaseSysRegDeviceOps, EmuDeviceType,
 };
 use axerrno::AxResult;
 use axvmconfig::EmulatedDeviceConfig;
@@ -34,7 +35,7 @@ impl<R: DeviceAddrRange> AxEmuDevices<R> {
     }
 
     // pub fn remove_dev(&mut self, ...)
-    // 
+    //
     // `remove_dev` seems to need something like `downcast-rs` to make sense. As it's not likely to
     // be able to have a proper predicate to remove a device from the list without knowing the
     // concrete type of the device.
@@ -80,7 +81,7 @@ fn log_device_io(
     width: AccessWidth,
 ) {
     let rw = if read { "read" } else { "write" };
-    info!(
+    trace!(
         "emu_device {}: {} {:#x} in range {:#x} with width {:?}",
         rw, addr_type, addr, addr_range, width
     )
@@ -116,29 +117,30 @@ impl AxVmDevices {
     }
 
     /// According the emu_configs to init every  specific device
-    fn init(_this: &mut Self, _emu_configs: &Vec<EmulatedDeviceConfig>) {
-        /*
+    fn init(this: &mut Self, emu_configs: &Vec<EmulatedDeviceConfig>) {
         for config in emu_configs {
             let dev = match EmuDeviceType::from_usize(config.emu_type) {
                 // todo call specific initialization function of devcise
-                EmuDeviceType::EmuDeviceTConsole => ,
-                EmuDeviceType::EmuDeviceTGicdV2 => ,
-                EmuDeviceType::EmuDeviceTGPPT => ,
-                EmuDeviceType::EmuDeviceTVirtioBlk => ,
-                EmuDeviceType::EmuDeviceTVirtioNet => ,
-                EmuDeviceType::EmuDeviceTVirtioConsole => ,
-                EmuDeviceType::EmuDeviceTIOMMU => ,
-                EmuDeviceType::EmuDeviceTICCSRE => ,
-                EmuDeviceType::EmuDeviceTSGIR => ,
-                EmuDeviceType::EmuDeviceTGICR => ,
-                EmuDeviceType::EmuDeviceTMeta => ,
-                _ => panic!("emu type: {} is still not supported", config.emu_type),
+                // EmuDeviceType::EmuDeviceTConsole => ,
+                EmuDeviceType::EmuDeviceTInterruptController => Ok(Arc::new(Vgic::new())),
+                // EmuDeviceType::EmuDeviceTGPPT => ,
+                // EmuDeviceType::EmuDeviceTVirtioBlk => ,
+                // EmuDeviceType::EmuDeviceTVirtioNet => ,
+                // EmuDeviceType::EmuDeviceTVirtioConsole => ,
+                // EmuDeviceType::EmuDeviceTIOMMU => ,
+                // EmuDeviceType::EmuDeviceTICCSRE => ,
+                // EmuDeviceType::EmuDeviceTSGIR => ,
+                // EmuDeviceType::EmuDeviceTGICR => ,
+                // EmuDeviceType::EmuDeviceTMeta => ,
+                _ => Err(format!(
+                    "emu type: {} is still not supported",
+                    config.emu_type
+                )),
             };
             if let Ok(emu_dev) = dev {
-                this.emu_devices.push(emu_dev)
+                this.add_mmio_dev(emu_dev)
             }
         }
-        */
     }
 
     /// Add a MMIO device to the device list
@@ -207,11 +209,7 @@ impl AxVmDevices {
     }
 
     /// Handle the MMIO read by GuestPhysAddr and data width, return the value of the guest want to read
-    pub fn handle_mmio_read(
-        &self,
-        addr: GuestPhysAddr,
-        width: AccessWidth,
-    ) -> AxResult<usize> {
+    pub fn handle_mmio_read(&self, addr: GuestPhysAddr, width: AccessWidth) -> AxResult<usize> {
         if let Some(emu_dev) = self.find_mmio_dev(addr) {
             log_device_io("mmio", addr, emu_dev.address_range(), true, width);
 
@@ -236,11 +234,7 @@ impl AxVmDevices {
     }
 
     /// Handle the system register read by SysRegAddr and data width, return the value of the guest want to read
-    pub fn handle_sys_reg_read(
-        &self,
-        addr: SysRegAddr,
-        width: AccessWidth,
-    ) -> AxResult<usize> {
+    pub fn handle_sys_reg_read(&self, addr: SysRegAddr, width: AccessWidth) -> AxResult<usize> {
         if let Some(emu_dev) = self.find_sys_reg_dev(addr) {
             log_device_io("sys_reg", addr.0, emu_dev.address_range(), true, width);
 
@@ -265,11 +259,7 @@ impl AxVmDevices {
     }
 
     /// Handle the port read by port number and data width, return the value of the guest want to read
-    pub fn handle_port_read(
-        &self,
-        port: Port,
-        width: AccessWidth,
-    ) -> AxResult<usize> {
+    pub fn handle_port_read(&self, port: Port, width: AccessWidth) -> AxResult<usize> {
         if let Some(emu_dev) = self.find_port_dev(port) {
             log_device_io("port", port.0, emu_dev.address_range(), true, width);
 
@@ -279,12 +269,7 @@ impl AxVmDevices {
     }
 
     /// Handle the port write by port number, data width and the value need to write, call specific device to write the value
-    pub fn handle_port_write(
-        &self,
-        port: Port,
-        width: AccessWidth,
-        val: usize,
-    ) -> AxResult {
+    pub fn handle_port_write(&self, port: Port, width: AccessWidth, val: usize) -> AxResult {
         if let Some(emu_dev) = self.find_port_dev(port) {
             log_device_io("port", port.0, emu_dev.address_range(), false, width);
 
