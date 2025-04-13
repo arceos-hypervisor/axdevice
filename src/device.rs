@@ -5,7 +5,6 @@ use crate::AxVmDeviceConfig;
 use alloc::format;
 use alloc::vec::Vec;
 use alloc::{boxed::Box, sync::Arc};
-use arm_vgic::Vgic;
 use axaddrspace::{
     GuestPhysAddr, GuestPhysAddrRange,
     device::{AccessWidth, DeviceAddrRange, Port, PortRange, SysRegAddr, SysRegAddrRange},
@@ -15,6 +14,9 @@ use axdevice_base::{
 };
 use axerrno::AxResult;
 use axvmconfig::EmulatedDeviceConfig;
+
+#[cfg(target_arch = "aarch64")]
+use arm_vgic::Vgic;
 
 /// A set of emulated device types that can be accessed by a specific address range type.
 pub struct AxEmuDevices<R: DeviceAddrRange> {
@@ -122,7 +124,19 @@ impl AxVmDevices {
             let dev = match EmuDeviceType::from_usize(config.emu_type) {
                 // todo call specific initialization function of devcise
                 // EmuDeviceType::EmuDeviceTConsole => ,
-                EmuDeviceType::EmuDeviceTInterruptController => Ok(Arc::new(Vgic::new())),
+                EmuDeviceType::EmuDeviceTInterruptController => {
+                    #[cfg(target_arch = "aarch64")]
+                    {
+                        Ok(Arc::new(Vgic::new()))
+                    }
+                    #[cfg(not(target_arch = "aarch64"))]
+                    {
+                        Err(format!(
+                            "emu type: {} is not supported on this platform",
+                            config.emu_type
+                        ))
+                    }
+                }
                 // EmuDeviceType::EmuDeviceTGPPT => ,
                 // EmuDeviceType::EmuDeviceTVirtioBlk => ,
                 // EmuDeviceType::EmuDeviceTVirtioNet => ,
