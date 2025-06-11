@@ -18,4 +18,4 @@ axaddrspace = { git = "https://github.com/arceos-hypervisor/axaddrspace.git" }
 axdevice_base = { git = "https://github.com/arceos-hypervisor/axdevice_crates.git", branch = "inject_interrupt" }
 
 [target.'cfg(target_arch = "aarch64")'.dependencies]
-arm_vgic = { git = "https://github.com/arceos-hypervisor/arm_vgic.git", branch = "debin/timer_api" }
+arm_vgic = { git = "https://github.com/arceos-hypervisor/arm_vgic.git", branch = "vmm_irq_gicv3" }
