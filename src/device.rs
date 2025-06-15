@@ -13,7 +13,7 @@ use axdevice_base::{
     BaseDeviceOps, BaseMmioDeviceOps, BasePortDeviceOps, BaseSysRegDeviceOps, EmuDeviceType,
 };
 use axerrno::{AxResult, ax_err};
-use axvmconfig::{EmulatedDeviceConfig, EmulatedDeviceType};
+use axvmconfig::EmulatedDeviceConfig;
 use memory_addr::is_aligned_4k;
 
 use crate::AxVmDeviceConfig;
@@ -126,8 +126,8 @@ impl AxVmDevices {
     /// According the emu_configs to init every  specific device
     fn init(this: &mut Self, emu_configs: &Vec<EmulatedDeviceConfig>) {
         for config in emu_configs {
-            match config.emu_type {
-                EmulatedDeviceType::EmuDeviceTInterruptController => {
+            match EmuDeviceType::from_usize(config.emu_type) {
+                EmuDeviceType::EmuDeviceTInterruptController => {
                     #[cfg(target_arch = "aarch64")]
                     {
                         this.add_mmio_dev(Arc::new(Vgic::new()));
@@ -140,7 +140,7 @@ impl AxVmDevices {
                         );
                     }
                 }
-                EmulatedDeviceType::IVCChannel => {
+                EmuDeviceType::EmuDeviceTIVCChannel => {
                     if this.ivc_channel.is_none() {
                         // Initialize the IVC channel range allocator
                         this.ivc_channel = Some(Mutex::new(RangeAllocator::new(Range {
