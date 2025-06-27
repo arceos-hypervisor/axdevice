@@ -71,7 +71,7 @@ impl AxVmDevices {
     /// Handle the MMIO read by GuestPhysAddr and data width, return the value of the guest want to read
     pub fn handle_mmio_read(&self, addr: GuestPhysAddr, width: AccessWidth) -> AxResult<usize> {
         if let Some(emu_dev) = self.find_dev(addr) {
-            error!(
+            trace!(
                 "emu: {:?} handler read ipa {:#x} width: {:?}",
                 emu_dev.address_range(),
                 addr,
