@@ -1,5 +1,6 @@
 use crate::AxVmDeviceConfig;
 
+use alloc::string::String;
 use alloc::vec::Vec;
 use alloc::{format, sync::Arc};
 
@@ -8,6 +9,7 @@ use axaddrspace::GuestPhysAddr;
 use axdevice_base::{BaseMmioDeviceOps, EmuDeviceType};
 use axerrno::AxResult;
 use axvirtio_blk::VirtioMmioDevice;
+use axvirtio_console::VirtioConsoleDevice;
 use axvmconfig::EmulatedDeviceConfig;
 
 /// represent A vm own devices
@@ -32,18 +34,24 @@ impl AxVmDevices {
     /// According the emu_configs to init every  specific device
     fn init(this: &mut Self, emu_configs: &Vec<EmulatedDeviceConfig>) {
         for config in emu_configs {
-            let dev = match EmuDeviceType::from_usize(config.emu_type) {
+            let dev: Result<Arc<dyn BaseMmioDeviceOps>, String> = match EmuDeviceType::from_usize(config.emu_type) {
                 // todo call specific initialization function of devcise
                 // EmuDeviceType::EmuDeviceTConsole => ,
                 // EmuDeviceType::EmuDeviceTGicdV2 => ,
                 // EmuDeviceType::EmuDeviceTGPPT => ,
                 EmuDeviceType::EmuDeviceTVirtioBlk => {
                     // Use the first non-zero index from cfg_list as device_index
-                    let device_index = config.cfg_list.iter().position(|&x| x != 0).unwrap_or(0);
-                    Ok(Arc::new(VirtioMmioDevice::new(config.base_gpa ,device_index).unwrap()))
+                    let device_index = config.cfg_list[0];
+                    error!("virtio_blk base_gpa:{:#x} device_index: {}", config.base_gpa, device_index);
+                    Ok(Arc::new(VirtioMmioDevice::new(config.base_gpa ,device_index, config.length).unwrap()))
                 }
                 // EmuDeviceType::EmuDeviceTVirtioNet => ,
-                // EmuDeviceType::EmuDeviceTVirtioConsole => ,
+                EmuDeviceType::EmuDeviceTVirtioConsole => {
+                    // Use the first non-zero index from cfg_list as device_index
+                    let device_index = config.cfg_list[0];
+                    error!("virtio_console base_gpa:{:#x} device_index: {}", config.base_gpa, device_index);
+                    Ok(Arc::new(VirtioConsoleDevice::new(config.base_gpa ,device_index, config.length).unwrap()))
+                },
                 // EmuDeviceType::EmuDeviceTIOMMU => ,
                 // EmuDeviceType::EmuDeviceTICCSRE => ,
                 // EmuDeviceType::EmuDeviceTSGIR => ,
