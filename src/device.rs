@@ -1,10 +1,10 @@
-use core::panic;
-
-use crate::AxVmDeviceConfig;
-
-use alloc::format;
+use alloc::sync::Arc;
 use alloc::vec::Vec;
-use alloc::{boxed::Box, sync::Arc};
+use core::ops::Range;
+
+use range_alloc::RangeAllocator;
+use spin::Mutex;
+
 use axaddrspace::{
     GuestPhysAddr, GuestPhysAddrRange,
     device::{AccessWidth, DeviceAddrRange, Port, PortRange, SysRegAddr, SysRegAddrRange},
@@ -12,8 +12,11 @@ use axaddrspace::{
 use axdevice_base::{
     BaseDeviceOps, BaseMmioDeviceOps, BasePortDeviceOps, BaseSysRegDeviceOps, EmuDeviceType,
 };
-use axerrno::AxResult;
+use axerrno::{AxResult, ax_err};
 use axvmconfig::EmulatedDeviceConfig;
+use memory_addr::is_aligned_4k;
+
+use crate::AxVmDeviceConfig;
 
 #[cfg(target_arch = "aarch64")]
 use arm_vgic::Vgic;
@@ -71,7 +74,8 @@ pub struct AxVmDevices {
     emu_mmio_devices: AxEmuMmioDevices,
     emu_sys_reg_devices: AxEmuSysRegDevices,
     emu_port_devices: AxEmuPortDevices,
-    // TODO passthrough devices or other type devices ...
+    /// IVC channel range allocator
+    ivc_channel: Option<Mutex<RangeAllocator<usize>>>,
 }
 
 #[inline]
@@ -112,6 +116,7 @@ impl AxVmDevices {
             emu_mmio_devices: AxEmuMmioDevices::new(),
             emu_sys_reg_devices: AxEmuSysRegDevices::new(),
             emu_port_devices: AxEmuPortDevices::new(),
+            ivc_channel: None,
         };
 
         Self::init(&mut this, &config.emu_configs);
@@ -121,39 +126,85 @@ impl AxVmDevices {
     /// According the emu_configs to init every  specific device
     fn init(this: &mut Self, emu_configs: &Vec<EmulatedDeviceConfig>) {
         for config in emu_configs {
-            let dev = match EmuDeviceType::from_usize(config.emu_type) {
-                // todo call specific initialization function of devcise
-                // EmuDeviceType::EmuDeviceTConsole => ,
+            match EmuDeviceType::from_usize(config.emu_type) {
                 EmuDeviceType::EmuDeviceTInterruptController => {
                     #[cfg(target_arch = "aarch64")]
                     {
-                        Ok(Arc::new(Vgic::new()))
+                        this.add_mmio_dev(Arc::new(Vgic::new()));
                     }
                     #[cfg(not(target_arch = "aarch64"))]
                     {
-                        Err(format!(
+                        warn!(
                             "emu type: {} is not supported on this platform",
                             config.emu_type
-                        ))
+                        );
                     }
                 }
-                // EmuDeviceType::EmuDeviceTGPPT => ,
-                // EmuDeviceType::EmuDeviceTVirtioBlk => ,
-                // EmuDeviceType::EmuDeviceTVirtioNet => ,
-                // EmuDeviceType::EmuDeviceTVirtioConsole => ,
-                // EmuDeviceType::EmuDeviceTIOMMU => ,
-                // EmuDeviceType::EmuDeviceTICCSRE => ,
-                // EmuDeviceType::EmuDeviceTSGIR => ,
-                // EmuDeviceType::EmuDeviceTGICR => ,
-                // EmuDeviceType::EmuDeviceTMeta => ,
-                _ => Err(format!(
-                    "emu type: {} is still not supported",
-                    config.emu_type
-                )),
-            };
-            if let Ok(emu_dev) = dev {
-                this.add_mmio_dev(emu_dev)
+                EmuDeviceType::EmuDeviceTIVCChannel => {
+                    if this.ivc_channel.is_none() {
+                        // Initialize the IVC channel range allocator
+                        this.ivc_channel = Some(Mutex::new(RangeAllocator::new(Range {
+                            start: config.base_gpa,
+                            end: config.base_gpa + config.length,
+                        })));
+                        info!(
+                            "IVCChannel initialized with base GPA {:#x} and length {:#x}",
+                            config.base_gpa, config.length
+                        );
+                    } else {
+                        warn!("IVCChannel already initialized, ignoring additional config");
+                    }
+                }
+                _ => {
+                    warn!(
+                        "Emulated device {}'s type {:?} is not supported yet",
+                        config.name, config.emu_type
+                    );
+                }
             }
+        }
+    }
+
+    pub fn alloc_ivc_channel(&self, size: usize) -> AxResult<GuestPhysAddr> {
+        if size == 0 {
+            return ax_err!(InvalidInput, "Size must be greater than 0");
+        }
+        if !is_aligned_4k(size) {
+            return ax_err!(InvalidInput, "Size must be aligned to 4K");
+        }
+
+        if let Some(allocator) = &self.ivc_channel {
+            allocator
+                .lock()
+                .allocate_range(size)
+                .map_err(|e| {
+                    warn!("Failed to allocate IVC channel range: {:x?}", e);
+                    axerrno::ax_err_type!(NoMemory, "IVC channel allocation failed")
+                })
+                .map(|range| {
+                    debug!("Allocated IVC channel range: {:x?}", range);
+                    GuestPhysAddr::from_usize(range.start)
+                })
+        } else {
+            ax_err!(InvalidInput, "IVC channel not exists")
+        }
+    }
+
+    pub fn release_ivc_channel(&self, addr: GuestPhysAddr, size: usize) -> AxResult {
+        if size == 0 {
+            return ax_err!(InvalidInput, "Size must be greater than 0");
+        }
+        if !is_aligned_4k(size) {
+            return ax_err!(InvalidInput, "Size must be aligned to 4K");
+        }
+
+        if let Some(allocator) = &self.ivc_channel {
+            allocator
+                .lock()
+                .free_range(addr.as_usize()..addr.as_usize() + size);
+            Ok(())
+        } else {
+            ax_err!(InvalidInput, "IVC channel not exists")
         }
     }
 
