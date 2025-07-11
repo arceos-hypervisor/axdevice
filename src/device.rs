@@ -165,6 +165,7 @@ impl AxVmDevices {
         }
     }
 
+    /// Allocates an IVC (Inter-VM Communication) channel of the specified size.
     pub fn alloc_ivc_channel(&self, size: usize) -> AxResult<GuestPhysAddr> {
         if size == 0 {
             return ax_err!(InvalidInput, "Size must be greater than 0");
@@ -190,6 +191,7 @@ impl AxVmDevices {
         }
     }
 
+    /// Releases an IVC channel at the specified address and size.
     pub fn release_ivc_channel(&self, addr: GuestPhysAddr, size: usize) -> AxResult {
         if size == 0 {
             return ax_err!(InvalidInput, "Size must be greater than 0");
