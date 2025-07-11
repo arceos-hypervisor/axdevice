@@ -16,8 +16,8 @@ memory_addr = "0.3"
 
 axvmconfig = { git = "https://github.com/arceos-hypervisor/axvmconfig.git", default-features = false }
 axaddrspace = { git = "https://github.com/arceos-hypervisor/axaddrspace.git" }
-axdevice_base = { git = "https://github.com/arceos-hypervisor/axdevice_crates.git", branch = "inject_interrupt" }
+axdevice_base = { git = "https://github.com/arceos-hypervisor/axdevice_crates.git" }
 range-alloc = { git = "https://github.com/arceos-hypervisor/range-alloc.git" }
 
 [target.'cfg(target_arch = "aarch64")'.dependencies]
-arm_vgic = { git = "https://github.com/arceos-hypervisor/arm_vgic.git", branch = "vmm_irq_gicv3" }
+arm_vgic = { git = "https://github.com/arceos-hypervisor/arm_vgic.git" }
