@@ -165,6 +165,11 @@ impl AxVmDevices {
                                 size,
                                 i,
                             )));
+
+                            info!(
+                                "GPPT Redistributor initialized for vCPU {} with base GPA {:#x} and length {:#x}",
+                                i, addr, size
+                            );
                         }
                     }
                     #[cfg(not(target_arch = "aarch64"))]
@@ -182,6 +187,11 @@ impl AxVmDevices {
                             config.base_gpa.into(),
                             Some(config.length),
                         )));
+
+                        info!(
+                            "GPPT Distributor initialized with base GPA {:#x} and length {:#x}",
+                            config.base_gpa, config.length
+                        );
                     }
                     #[cfg(not(target_arch = "aarch64"))]
                     {
@@ -194,16 +204,23 @@ impl AxVmDevices {
                 EmuDeviceType::GPPTITS => {
                     #[cfg(target_arch = "aarch64")]
                     {
-                        this.add_mmio_dev(Arc::new(arm_vgic::v3::gits::Gits::new(
-                            config.base_gpa.into(),
-                            config.length,
-                            config
+                        let host_gits_base = config
                                 .cfg_list
                                 .get(0)
                                 .map(PhysAddr::from_usize)
-                                .expect("expect 1 arg for gppt its (host_gits_base)"),
+                                .expect("expect 1 arg for gppt its (host_gits_base)");
+
+                        this.add_mmio_dev(Arc::new(arm_vgic::v3::gits::Gits::new(
+                            config.base_gpa.into(),
+                            config.length,
+                            host_gits_base,
                             false,
                         )));
+
+                        info!(
+                            "GPPT ITS initialized with base GPA {:#x} and length {:#x}, host GITS base {:#x}",
+                            config.base_gpa, config.length, host_gits_base
+                        );
                     }
                     #[cfg(not(target_arch = "aarch64"))]
                     {
