@@ -26,7 +26,7 @@ pub struct AxEmuDevices<R: DeviceAddrRange> {
     emu_devices: Vec<Arc<dyn BaseDeviceOps<R>>>,
 }
 
-impl<R: DeviceAddrRange> AxEmuDevices<R> {
+impl<R: DeviceAddrRange + 'static> AxEmuDevices<R> {
     /// Creates a new [`AxEmuDevices`] instance.
     pub fn new() -> Self {
         Self {
@@ -144,7 +144,7 @@ impl AxVmDevices {
                     #[cfg(target_arch = "aarch64")]
                     {
                         const GPPT_GICR_ARG_ERR_MSG: &'static str =
-                            "expect 3 args for gppt redistributor (cpu_num, stride)";
+                            "expect 3 args for gppt redistributor (cpu_num, stride, pcpu_id)";
 
                         let cpu_num = config
                             .cfg_list
@@ -156,14 +156,19 @@ impl AxVmDevices {
                             .get(1)
                             .copied()
                             .expect(GPPT_GICR_ARG_ERR_MSG);
+                        let pcpu_id = config
+                            .cfg_list
+                            .get(2)
+                            .copied()
+                            .expect(GPPT_GICR_ARG_ERR_MSG);
 
                         for i in 0..cpu_num {
                             let addr = config.base_gpa + i * stride;
                             let size = config.length;
                             this.add_mmio_dev(Arc::new(arm_vgic::v3::vgicr::VGicR::new(
                                 addr.into(),
-                                size,
-                                i,
+                                Some(size),
+                                pcpu_id + i,
                             )));
 
                             info!(
@@ -207,12 +212,13 @@ impl AxVmDevices {
                         let host_gits_base = config
                                 .cfg_list
                                 .get(0)
+                                .copied()
                                 .map(PhysAddr::from_usize)
                                 .expect("expect 1 arg for gppt its (host_gits_base)");
 
                         this.add_mmio_dev(Arc::new(arm_vgic::v3::gits::Gits::new(
                             config.base_gpa.into(),
-                            config.length,
+                            Some(config.length),
                             host_gits_base,
                             false,
                         )));
