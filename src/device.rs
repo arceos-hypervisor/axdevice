@@ -210,11 +210,11 @@ impl AxVmDevices {
                     #[cfg(target_arch = "aarch64")]
                     {
                         let host_gits_base = config
-                                .cfg_list
-                                .get(0)
-                                .copied()
-                                .map(PhysAddr::from_usize)
-                                .expect("expect 1 arg for gppt its (host_gits_base)");
+                            .cfg_list
+                            .get(0)
+                            .copied()
+                            .map(PhysAddr::from_usize)
+                            .expect("expect 1 arg for gppt its (host_gits_base)");
 
                         this.add_mmio_dev(Arc::new(arm_vgic::v3::gits::Gits::new(
                             config.base_gpa.into(),
