@@ -13,6 +13,7 @@ use axdevice_base::{BaseDeviceOps, BaseMmioDeviceOps, BasePortDeviceOps, BaseSys
 use axerrno::{AxResult, ax_err};
 use axvmconfig::{EmulatedDeviceConfig, EmulatedDeviceType};
 use memory_addr::{PhysAddr, is_aligned_4k};
+use axvirtio_blk::VirtioBlkDevice;
 
 use crate::AxVmDeviceConfig;
 
@@ -109,7 +110,12 @@ fn panic_device_not_found(
 /// The implemention for AxVmDevices
 impl AxVmDevices {
     /// According AxVmDeviceConfig to init the AxVmDevices
-    pub fn new(config: AxVmDeviceConfig) -> Self {
+    pub fn new(
+        config: AxVmDeviceConfig,
+        read_guest_mem: Arc<dyn Fn(GuestPhysAddr, usize) -> AxResult<Vec<u8>> + Send + Sync>,
+        write_guest_mem: Arc<dyn Fn(GuestPhysAddr, &[u8]) -> AxResult<()> + Send + Sync>,
+        inject_irq: Arc<dyn Fn(usize) -> AxResult + Send + Sync>,
+    ) -> Self {
         let mut this = Self {
             emu_mmio_devices: AxEmuMmioDevices::new(),
             emu_sys_reg_devices: AxEmuSysRegDevices::new(),
@@ -118,6 +124,25 @@ impl AxVmDevices {
         };
 
         Self::init(&mut this, &config.emu_configs);
+        
+        // Initialize Virtio-blk devices
+        for blk_config in &config.virtio_blk_configs {
+            match VirtioBlkDevice::new(
+                blk_config,
+                read_guest_mem.clone(),
+                write_guest_mem.clone(),
+                inject_irq.clone(),
+            ) {
+                Ok(dev) => {
+                    info!("Virtio-blk device initialized at {}", blk_config.mmio_base);
+                    this.add_mmio_dev(Arc::new(dev));
+                }
+                Err(e) => {
+                    error!("Failed to initialize Virtio-blk device: {:?}", e);
+                }
+            }
+        }
+        
         this
     }
 
@@ -374,7 +399,7 @@ impl AxVmDevices {
         if let Some(emu_dev) = self.find_mmio_dev(addr) {
             log_device_io("mmio", addr, emu_dev.address_range(), true, width);
 
-            return emu_dev.handle_read(addr, width);
+            return Ok(emu_dev.handle_read(addr, width)?);
         }
         panic_device_not_found("mmio", addr, true, width);
     }
@@ -389,7 +414,7 @@ impl AxVmDevices {
         if let Some(emu_dev) = self.find_mmio_dev(addr) {
             log_device_io("mmio", addr, emu_dev.address_range(), false, width);
 
-            return emu_dev.handle_write(addr, width, val);
+            return Ok(emu_dev.handle_write(addr, width, val)?);
         }
         panic_device_not_found("mmio", addr, false, width);
     }
@@ -399,7 +424,7 @@ impl AxVmDevices {
         if let Some(emu_dev) = self.find_sys_reg_dev(addr) {
             log_device_io("sys_reg", addr.0, emu_dev.address_range(), true, width);
 
-            return emu_dev.handle_read(addr, width);
+            return Ok(emu_dev.handle_read(addr, width)?);
         }
         panic_device_not_found("sys_reg", addr, true, width);
     }
@@ -414,7 +439,7 @@ impl AxVmDevices {
         if let Some(emu_dev) = self.find_sys_reg_dev(addr) {
             log_device_io("sys_reg", addr.0, emu_dev.address_range(), false, width);
 
-            return emu_dev.handle_write(addr, width, val);
+            return Ok(emu_dev.handle_write(addr, width, val)?);
         }
         panic_device_not_found("sys_reg", addr, false, width);
     }
@@ -424,7 +449,7 @@ impl AxVmDevices {
         if let Some(emu_dev) = self.find_port_dev(port) {
             log_device_io("port", port.0, emu_dev.address_range(), true, width);
 
-            return emu_dev.handle_read(port, width);
+            return Ok(emu_dev.handle_read(port, width)?);
         }
         panic_device_not_found("port", port, true, width);
     }
@@ -434,7 +459,7 @@ impl AxVmDevices {
         if let Some(emu_dev) = self.find_port_dev(port) {
             log_device_io("port", port.0, emu_dev.address_range(), false, width);
 
-            return emu_dev.handle_write(port, width, val);
+            return Ok(emu_dev.handle_write(port, width, val)?);
         }
         panic_device_not_found("port", port, false, width);
     }
