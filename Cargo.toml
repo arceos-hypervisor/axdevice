@@ -4,6 +4,8 @@ version = "0.1.0"
 edition = "2024"
 
 [features]
+default = []
+fs = ["axvirtio-blk/fs"]
 
 [dependencies]
 log = "0.4"
