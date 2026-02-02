@@ -40,3 +40,6 @@ axaddrspace = "0.1"
 memory_addr = "0.4"
 axerrno = "0.1"
 axvmconfig = "0.1"
+
+[patch.crates-io]
+axvmconfig = { git = "https://github.com/arceos-hypervisor/axvmconfig.git", branch = "next" }
