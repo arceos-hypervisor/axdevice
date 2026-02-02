@@ -4,8 +4,11 @@ name = "axdevice"
 version = "0.1.0"
 
 [features]
+virtio-blk = ["axvirtio-blk", "axvirtio-common", "axdriver_block"]
+virtio-console = ["axvirtio-console", "axvirtio-common", "dep:axplat"]
 
 [dependencies]
+arrayvec = { version = "0.7", default-features = false }
 cfg-if = "1.0"
 log = "0.4"
 spin = "0.9"
@@ -19,5 +22,18 @@ axdevice_base = "0.1"
 axvmconfig = {version = "0.1", default-features = false}
 range-alloc = {git = "https://github.com/arceos-hypervisor/range-alloc.git"}
 
+# VirtIO devices (optional)
+axvirtio-blk = { path = "/home/yanlien/Program/console/axvirtio-devices/axvirtio-blk", optional = true }
+axvirtio-console = { path = "/home/yanlien/Program/console/axvirtio-devices/axvirtio-console", optional = true }
+axvirtio-common = { path = "/home/yanlien/Program/console/axvirtio-devices/axvirtio-common", optional = true }
+# axvirtio-blk = { git = "https://github.com/arceos-hypervisor/axvirtio-devices.git", branch = "yanlien/next", optional = true }
+# axvirtio-console = { git = "https://github.com/arceos-hypervisor/axvirtio-devices.git", branch = "yanlien/next", optional = true }
+# axvirtio-common = { git = "https://github.com/arceos-hypervisor/axvirtio-devices.git", branch = "yanlien/next", optional = true }
+axdriver_block = { git = "https://github.com/arceos-org/axdriver_crates.git", tag = "dev-v01", optional = true }
+axplat = { git = "https://github.com/arceos-org/axplat_crates.git", tag = "dev-v03", optional = true }
+
 [target.'cfg(target_arch = "aarch64")'.dependencies]
 arm_vgic = {version = "0.1", features = ["vgicv3"]}
+
+[target.'cfg(target_arch = "riscv64")'.dependencies]
+riscv_vplic = { git = "https://github.com/arceos-hypervisor/riscv_vplic.git" }
