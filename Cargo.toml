@@ -1,7 +1,16 @@
 [package]
 name = "axdevice"
 version = "0.1.0"
+description = "A reusable, OS-agnostic device abstraction layer designed for virtual machines."
+homepage = "https://github.com/arceos-hypervisor/axdevice"
+repository = "https://github.com/arceos-hypervisor/axdevice"
+keywords = ["hypervisor"]
+license = "MIT OR Apache-2.0"
+authors = ["aarkegz <aarkegz@gmail.com>"]
+documentation = "https://docs.rs/axdevice"
+categories = ["virtualization"]
 edition = "2024"
+readme = "README.md"
 
 [features]
 
@@ -22,8 +31,12 @@ range-alloc-arceos = { git = "https://github.com/arceos-hypervisor/range-alloc-a
 [target.'cfg(target_arch = "aarch64")'.dependencies]
 arm_vgic = { version = "0.1", features = ["vgicv3"] }
 
+[target.'cfg(target_arch = "riscv64")'.dependencies]
+riscv_vplic = { git = "https://github.com/arceos-hypervisor/riscv_vplic.git", rev = "8bc5213" }
+
 [patch.crates-io]
-axvmconfig = { git = "https://github.com/arceos-hypervisor/axvmconfig.git", branch = "aar-master" }
+# axvmconfig = { git = "https://github.com/arceos-hypervisor/axvmconfig.git", branch = "aar-master" }
+axvmconfig = { path = "../axvmconfig" }
 axaddrspace = { git = "https://github.com/arceos-hypervisor/axaddrspace", branch = "aar-master" }
 axdevice_base = { git = "https://github.com/arceos-hypervisor/axdevice_crates", branch = "aar-master"}
 arm_vgic = { git = "https://github.com/arceos-hypervisor/arm_vgic", branch = "aar-master"}
